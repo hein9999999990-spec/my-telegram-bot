@@ -6,13 +6,15 @@ import time
 from flask import Flask, request
 import threading
 
-# --- Settings ---
-TOKEN = "8453592254:AAFIEiG7vTEw6oCzMgOCZJAtdKvcjf2VbsY"
-ADMIN_ID = "8176057500"
+# --- Settings (Security Layer) ---
+# Token နဲ့ ID ကို Code ထဲမှာ မမြင်ရအောင် Environment Variable ကနေ ဆွဲယူပါမယ်
+TOKEN = os.environ.get("BOT_TOKEN") 
+ADMIN_ID = os.environ.get("ADMIN_ID")
 PAYMENT_CHANNEL = "@HHPayMentChannel"
 MUST_JOIN = ["@HHPayMentChannel", "@mbfree1930channel", "@hmovie19", "@hhfreemoney3"]
 LOGO_URL = "https://i.ibb.co/v4S8L8Y/HH-Logo.jpg"
-RENDER_URL = "https://my-telegram-bot-6.onrender.com" # သင့် Render Link
+# သင့် Render URL ကို ဒီမှာ ပြန်စစ်ပေးပါ
+RENDER_URL = "https://my-telegram-bot-6.onrender.com" 
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
@@ -21,8 +23,10 @@ DATA_FILE = "users_data.json"
 # --- Data Management ---
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
-        try: users = json.load(f)
-        except: users = {}
+        try:
+            users = json.load(f)
+        except:
+            users = {}
 else:
     users = {}
 
@@ -34,8 +38,10 @@ def check_join(user_id):
     for channel in MUST_JOIN:
         try:
             status = bot.get_chat_member(channel, user_id).status
-            if status == "left": return False
-        except: return False
+            if status == "left":
+                return False
+        except:
+            return False
     return True
 
 def show_menu(message):
@@ -44,21 +50,24 @@ def show_menu(message):
     markup.add("💰 Wallet", "👥 Referral")
     markup.add("🎁 Daily Bonus", "🏆 Leaderboard")
     markup.add("📤 Withdraw", "📜 History")
-    caption_text = "👋 HH Free Money Bot မှ ကြိုဆိုပါတယ်!"
-    try: bot.send_photo(uid, LOGO_URL, caption=caption_text, reply_markup=markup)
-    except: bot.send_message(uid, caption_text, reply_markup=markup)
 
-# --- [3] Flask Route for IP & Device Check ---
+    caption_text = "👋 HH Free Money Bot မှ ကြိုဆိုပါတယ်!"
+    try:
+        bot.send_photo(uid, LOGO_URL, caption=caption_text, reply_markup=markup)
+    except:
+        bot.send_message(uid, caption_text, reply_markup=markup)
+
+# --- [3] IP & Device Verification Route ---
 @app.route('/verify-device/<uid>')
 def verify_device(uid):
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     user_agent = request.headers.get('User-Agent')
     
     if uid in users:
-        # IP တူတာရှိမရှိ စစ်ဆေးခြင်း (Anti-Fraud)
+        # IP အတုအယောင် စစ်ဆေးခြင်း
         for u in users:
             if users[u].get('user_ip') == user_ip and u != uid:
-                return "<h1>Access Denied!</h1><p>ဒီ IP နဲ့ အကောင့်တစ်ခု ရှိပြီးသားမို့ ထပ်လုပ်လို့မရပါဘူး။</p>"
+                return "<h1>Access Denied!</h1><p>ဒီ IP နဲ့ အခြားအကောင့်တစ်ခု ရှိပြီးသားမို့ ထပ်လုပ်လို့မရပါဘူး။</p>"
 
         users[uid]['ip_verified'] = True
         users[uid]['user_ip'] = user_ip
@@ -80,17 +89,23 @@ def start(message):
 
     if uid not in users:
         users[uid] = {
-            'name': message.from_user.first_name, 'balance': 0, 'referrals': 0,
-            'is_banned': False, 'last_bonus': 0, 'history': [],
+            'name': message.from_user.first_name,
+            'balance': 0,
+            'referrals': 0,
+            'is_banned': False,
+            'last_bonus': 0,
+            'history': [],
             'referred_by': args[1] if len(args) > 1 else None,
-            'referral_rewarded': False, 'is_verified': False, 'ip_verified': False
+            'referral_rewarded': False,
+            'is_verified': False,
+            'ip_verified': False
         }
         save_data()
 
     if users[uid].get('is_banned'):
         return bot.send_message(uid, "❌ သင်သည် Ban ခံထားရပါသည်။")
 
-    # 1. Membership Check
+    # အဆင့် ၁ - Channel Join Check
     if not check_join(uid):
         markup = types.InlineKeyboardMarkup()
         for ch in MUST_JOIN:
@@ -98,21 +113,21 @@ def start(message):
         markup.add(types.InlineKeyboardButton(text="Check Join ✅", callback_data="check"))
         return bot.send_message(uid, "⚠️ Bot သုံးရန် အောက်ပါ Channel များ Join ပါ။", reply_markup=markup)
 
-    # 2. IP & Device Check (ဒီမှာ Link ပေါ်ပါမယ်)
+    # အဆင့် ၂ - IP & Device Check (ဒီနေရာမှာ Link ပေါ်ပါမယ်)
     if not users[uid].get('ip_verified'):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🛡️ Verify IP & Device", url=f"{RENDER_URL}/verify-device/{uid}"))
         return bot.send_message(uid, "🔒 လုံခြုံရေးအတွက် အောက်က Link ကိုနှိပ်ပြီး IP/Device အရင်စစ်ပေးပါ။", reply_markup=markup)
 
-    # 3. Phone Verification
+    # အဆင့် ၃ - Phone Verification
     if not users[uid].get('is_verified'):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        markup.add(types.KeyboardButton("🛡️ Verify Phone", request_contact=True))
-        return bot.send_message(uid, "🛡️ ဖုန်းနံပါတ် Verify လုပ်ပေးပါ။", reply_markup=markup)
+        markup.add(types.KeyboardButton("🛡️ Verify Phone (Share Phone)", request_contact=True))
+        return bot.send_message(uid, "🛡️ Referral စနစ်အတွက် ဖုန်းနံပါတ် Verify လုပ်ရန် လိုအပ်ပါသည်။", reply_markup=markup)
 
     show_menu(message)
 
-# --- Phone Handler ---
+# --- Phone Verification Handler ---
 @bot.message_handler(content_types=['contact'])
 def contact_handler(message):
     uid = str(message.from_user.id)
@@ -124,47 +139,29 @@ def contact_handler(message):
         bot.send_message(uid, "✅ Verification အောင်မြင်ပါသည်။")
         show_menu(message)
 
-# --- ကျန်သည့် Function များ (မူရင်းအတိုင်း) ---
-@bot.callback_query_handler(func=lambda call: call.data == "check")
-def check_callback(call):
-    uid = str(call.from_user.id)
-    if check_join(uid):
-        inviter_id = users[uid].get('referred_by')
-        if inviter_id and not users[uid].get('referral_rewarded'):
-            if inviter_id in users and inviter_id != uid:
-                users[inviter_id]['balance'] += 50
-                users[inviter_id]['referrals'] += 1
-                users[uid]['referral_rewarded'] = True
-                save_data()
-                try: bot.send_message(inviter_id, f"🎉 သင့် Link မှ လူတစ်ယောက် Join သဖြင့် 50 ကျပ် ရရှိပါပြီ!")
-                except: pass
-        start(call.message)
-    else:
-        bot.answer_callback_query(call.id, "⚠️ Channel အားလုံးကို အရင် Join ပါဦး။", show_alert=True)
+# --- Admin Broadcast ---
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if str(message.from_user.id) == ADMIN_ID:
+        msg_text = message.text.replace("/broadcast ", "")
+        if msg_text == "/broadcast":
+            return bot.reply_to(message, "ပို့ချင်တဲ့ စာသားရိုက်ပေးပါ")
+        count = 0
+        for u in list(users.keys()):
+            try:
+                bot.send_message(u, f"📢 **သတင်းစကား:**\n\n{msg_text}", parse_mode="Markdown")
+                count += 1
+            except: pass
+        bot.reply_to(message, f"✅ User {count} ဦးကို စာပို့ပြီးပါပြီ။")
 
-@bot.message_handler(func=lambda m: m.text == "💰 Wallet")
-def wallet(message):
-    uid = str(message.from_user.id)
-    bot.reply_to(message, f"💰 လက်ကျန်ငွေ: {users[uid].get('balance', 0)} ကျပ်")
-
-@bot.message_handler(func=lambda m: m.text == "🎁 Daily Bonus")
-def bonus(message):
-    uid = str(message.from_user.id)
-    now = time.time()
-    if now - users[uid].get('last_bonus', 0) < 86400:
-        return bot.reply_to(message, "❌ ၂၄ နာရီ မပြည့်သေးပါ။")
-    users[uid]['balance'] += 125
-    users[uid]['last_bonus'] = now
-    save_data()
-    bot.reply_to(message, "✅ 125 ကျပ် ရရှိပါပြီ။")
-
-# (ကျန်တဲ့ Withdraw, History, Leaderboard code တွေ ဒီအောက်မှာ ဆက်ထည့်နိုင်ပါတယ်)
-
+# --- Run Server & Bot ---
 def run_bot():
-    bot.polling(none_stop=True)
+    if TOKEN:
+        bot.polling(none_stop=True)
+    else:
+        print("BOT_TOKEN is not set!")
 
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)

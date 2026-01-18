@@ -7,13 +7,15 @@ from flask import Flask, request
 import threading
 
 # --- Settings (Security Layer) ---
-# Token နဲ့ ID ကို Code ထဲမှာ မမြင်ရအောင် Environment Variable ကနေ ဆွဲယူပါမယ်
 TOKEN = os.environ.get("BOT_TOKEN") 
-ADMIN_ID = os.environ.get("ADMIN_ID")
+# ADMIN_ID ကို နံပါတ်အဖြစ် သေချာပြောင်းလဲခြင်း
+admin_env = os.environ.get("ADMIN_ID")
+ADMIN_ID = int(admin_env) if admin_env else None
+
 PAYMENT_CHANNEL = "@HHPayMentChannel"
 MUST_JOIN = ["@HHPayMentChannel", "@mbfree1930channel", "@hmovie19", "@hhfreemoney3"]
 LOGO_URL = "https://i.ibb.co/v4S8L8Y/HH-Logo.jpg"
-# သင့် Render URL ကို ဒီမှာ ပြန်စစ်ပေးပါ
+# Render URL မှန်ကန်အောင် ပြင်ဆင်ထားသည်
 RENDER_URL = "https://my-telegram-bot-6-vo9u.onrender.com" 
 
 bot = telebot.TeleBot(TOKEN)
@@ -64,7 +66,6 @@ def verify_device(uid):
     user_agent = request.headers.get('User-Agent')
     
     if uid in users:
-        # IP အတုအယောင် စစ်ဆေးခြင်း
         for u in users:
             if users[u].get('user_ip') == user_ip and u != uid:
                 return "<h1>Access Denied!</h1><p>ဒီ IP နဲ့ အခြားအကောင့်တစ်ခု ရှိပြီးသားမို့ ထပ်လုပ်လို့မရပါဘူး။</p>"
@@ -105,7 +106,6 @@ def start(message):
     if users[uid].get('is_banned'):
         return bot.send_message(uid, "❌ သင်သည် Ban ခံထားရပါသည်။")
 
-    # အဆင့် ၁ - Channel Join Check
     if not check_join(uid):
         markup = types.InlineKeyboardMarkup()
         for ch in MUST_JOIN:
@@ -113,13 +113,12 @@ def start(message):
         markup.add(types.InlineKeyboardButton(text="Check Join ✅", callback_data="check"))
         return bot.send_message(uid, "⚠️ Bot သုံးရန် အောက်ပါ Channel များ Join ပါ။", reply_markup=markup)
 
-    # အဆင့် ၂ - IP & Device Check (ဒီနေရာမှာ Link ပေါ်ပါမယ်)
+    # အဆင့် ၂ - IP Verification (ip_verified false ဖြစ်နေမှ Button ပေါ်မည်)
     if not users[uid].get('ip_verified'):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🛡️ Verify IP & Device", url=f"{RENDER_URL}/verify-device/{uid}"))
         return bot.send_message(uid, "🔒 လုံခြုံရေးအတွက် အောက်က Link ကိုနှိပ်ပြီး IP/Device အရင်စစ်ပေးပါ။", reply_markup=markup)
 
-    # အဆင့် ၃ - Phone Verification
     if not users[uid].get('is_verified'):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         markup.add(types.KeyboardButton("🛡️ Verify Phone (Share Phone)", request_contact=True))
@@ -142,7 +141,8 @@ def contact_handler(message):
 # --- Admin Broadcast ---
 @bot.message_handler(commands=['broadcast'])
 def broadcast(message):
-    if str(message.from_user.id) == ADMIN_ID:
+    # ADMIN_ID ကို integer နဲ့ တိုက်စစ်သည်
+    if message.from_user.id == ADMIN_ID:
         msg_text = message.text.replace("/broadcast ", "")
         if msg_text == "/broadcast":
             return bot.reply_to(message, "ပို့ချင်တဲ့ စာသားရိုက်ပေးပါ")
@@ -156,12 +156,15 @@ def broadcast(message):
 
 # --- Run Server & Bot ---
 def run_bot():
-    if TOKEN:
-        bot.polling(none_stop=True)
-    else:
-        print("BOT_TOKEN is not set!")
+    print("Bot Polling started...")
+    bot.infinity_polling()
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    # Bot ကို Thread ထဲမှာ အရင် Run မည်
+    t = threading.Thread(target=run_bot)
+    t.daemon = True
+    t.start()
+    
+    # Flask Server ကို Main Thread မှာ Run မည်
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)

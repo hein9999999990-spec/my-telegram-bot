@@ -14,7 +14,7 @@ PAYMENT_CHANNEL = "@HHPayMentChannel"
 MUST_JOIN = ["@HHPayMentChannel", "@mbfree1930channel", "@hmovie19", "@hhfreemoney3"]
 LOGO_URL = "https://i.ibb.co/v4S8L8Y/HH-Logo.jpg"
 # သင့် Render URL ကို ဒီမှာ ပြန်စစ်ပေးပါ
-RENDER_URL = "https://my-telegram-bot-6.onrender.com" 
+RENDER_URL = "https://my-telegram-bot-6-vo9u.onrender.com" 
 
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
